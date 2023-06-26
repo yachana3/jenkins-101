@@ -1,34 +1,33 @@
 pipeline {
-    agent any
-    triggers {
-        pollSCM '* * * * *'
+    agent none
+    options {
+        skipStagesAfterUnstable()
     }
     stages {
         stage('Build') {
+            agent {
+                docker {
+                    image 'python:2-alpine'
+                }
+            }
             steps {
-                echo "Building.."
-                sh '''
-                cd myapp
-                pip3 install -r requirements.txt
-                '''
+                sh 'python -m py_compile sources/add2vals.py sources/calc.py'
+                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
         stage('Test') {
-            steps {
-                echo "Testing.."
-                sh '''
-                cd myapp
-                python3 hello.py
-                python3 hello.py --name=Brad
-                '''
+            agent {
+                docker {
+                    image 'qnib/pytest'
+                }
             }
-        }
-        stage('Deliver') {
             steps {
-                echo 'Deliver....'
-                sh '''
-                echo "doing delivery stuff.."
-                '''
+                sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
+            }
+            post {
+                always {
+                    junit 'test-reports/results.xml'
+                }
             }
         }
     }
